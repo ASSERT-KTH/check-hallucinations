@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "check-hallucinations"
+version = "0.1.0"
+authors = [
+  { name = "Martin Monperrus", email = "martin.monperrus@gmail.com" },
+]
+description = "Check BibTeX references for hallucinations before submitting a paper to arXiv"
+readme = "README.md"
+requires-python = ">=3.8"
+license = "MIT"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Text Processing :: Markup :: LaTeX",
+]
+dependencies = [
+    "bibtexparser",
+    "requests",
+]
+
+[project.scripts]
+check-hallucinations = "check_hallucinations.main:main"
+
+[project.urls]
+Homepage = "https://github.com/ASSERT-KTH/check-hallucinations"
+"Bug Tracker" = "https://github.com/ASSERT-KTH/check-hallucinations/issues"
