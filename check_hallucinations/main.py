@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import time
+import unicodedata
 
 import requests
 from bibtexparser.bparser import BibTexParser
@@ -21,8 +22,12 @@ def _api_key():
     return {"x-api-key": key} if key else {}
 
 
+def _strip_diacritics(s):
+    return "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn")
+
+
 def _normalize_title(title):
-    return (
+    return _strip_diacritics(
         title.lower()
         .strip()
         .rstrip(".")
@@ -135,6 +140,8 @@ def process_bibtex_file(filepath):
 
     for i, entry in enumerate(bib_database.entries, 1):
         title = entry.get('title', None)
+        if title:
+            title = " ".join(title.replace("{", "").replace("}", "").split())
 
         # misc entries without eprint are typically non-arxiv web references
         if entry.get("eprint") is None and entry.get('ENTRYTYPE') == 'misc':
