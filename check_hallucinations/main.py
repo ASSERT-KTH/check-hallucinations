@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import time
 import unicodedata
 
@@ -57,6 +58,47 @@ def _get_doi_target(doi):
     response = requests.get(url, allow_redirects=True)
     response.raise_for_status()
     return response.url
+
+
+class MiscEntryError(Exception):
+    pass
+
+
+def _extract_url(howpublished):
+    m = re.search(r'\\url\{([^}]+)\}', howpublished)
+    if m:
+        return m.group(1)
+    m = re.search(r'https?://\S+', howpublished)
+    if m:
+        return m.group(0)
+    return None
+
+
+def _fetch_page_title(url):
+    fname = _cache_path("page_title", url)
+    if os.path.exists(fname):
+        with open(fname) as f:
+            return json.load(f)["title"]
+    resp = requests.get(url, timeout=10, allow_redirects=True,
+                        headers={"User-Agent": "check-hallucinations/1.0"})
+    resp.raise_for_status()
+    m = re.search(r'<title[^>]*>([^<]+)</title>', resp.text, re.IGNORECASE)
+    title = m.group(1).strip() if m else ""
+    with open(fname, "w") as f:
+        json.dump({"title": title}, f)
+    return title
+
+
+def check_misc_url(url, bib_title):
+    page_title = _fetch_page_title(url)
+    if not page_title:
+        raise MiscEntryError(f"No <title> found at {url}")
+    norm_bib = _normalize_title(bib_title)
+    norm_page = _normalize_title(page_title)
+    if norm_bib not in norm_page:
+        raise MiscEntryError(
+            f"Title does not match page: {bib_title!r} not found in {page_title!r}"
+        )
 
 
 class SemanticScholarNotFound(Exception):
@@ -145,10 +187,20 @@ def process_bibtex_file(filepath):
         if title:
             title = " ".join(title.replace("{", "").replace("}", "").split())
 
-        # misc entries without eprint are typically non-arxiv web references
+        # misc entries without eprint are web references — check URL and title
         if entry.get("eprint") is None and entry.get('ENTRYTYPE') == 'misc':
-            if 'howpublished' not in entry:
+            howpublished = entry.get('howpublished', '')
+            url = _extract_url(howpublished)
+            if not url:
                 print(f"\033[91m\nURL with no URL {i}/{len(bib_database.entries)}: {title}\033[0m")
+            else:
+                try:
+                    check_misc_url(url, title)
+                    print(f"\nMisc {i}/{len(bib_database.entries)}: {title}")
+                    print(f"URL: {url}")
+                except Exception as e:
+                    print(e)
+                    print(f"\033[91m\nHallucinated Misc {i}/{len(bib_database.entries)}: {title}\033[0m")
             continue
 
         try:
