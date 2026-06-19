@@ -32,6 +32,7 @@ def _normalize_title(title):
         title.lower()
         .strip()
         .rstrip(".")
+        .replace("--", "-")
         .replace("\\$", "$")
         .replace("\\%", "%")
         .replace("\\&", "&")

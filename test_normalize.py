@@ -24,3 +24,9 @@ def test_latex_dollar_escape():
     bib = r"Fixing 55 out of 105 bugs for \$8 each"
     ss  = "Fixing 55 out of 105 bugs for $8 each"
     assert _normalize_title(bib) == _normalize_title(ss)
+
+
+def test_double_dash_vs_single_dash():
+    bib = "DeepSeek-Coder: When the large language model meets programming -- the rise of code intelligence"
+    ss  = "DeepSeek-Coder: When the Large Language Model Meets Programming - The Rise of Code Intelligence"
+    assert _normalize_title(bib) == _normalize_title(ss)
