@@ -32,6 +32,10 @@ def _normalize_title(title):
         title.lower()
         .strip()
         .rstrip(".")
+        .replace("\\$", "$")
+        .replace("\\%", "%")
+        .replace("\\&", "&")
+        .replace("\\#", "#")
         .replace(": ", ". ")
         .replace(",", " ")
         .replace("   ", " ")
@@ -93,7 +97,9 @@ def check_misc_url(url, bib_title):
     page_title = _fetch_page_title(url)
     if not page_title:
         raise MiscEntryError(f"No <title> found at {url}")
-    norm_bib = _normalize_title(bib_title)
+    # When the bib title has a colon, the part after it is the real title
+    search_title = bib_title.split(":", 1)[1].strip() if ":" in bib_title else bib_title
+    norm_bib = _normalize_title(search_title)
     norm_page = _normalize_title(page_title)
     if norm_bib not in norm_page:
         raise MiscEntryError(

@@ -18,3 +18,9 @@ def test_diacritics():
 
 def test_curly_braces():
     assert _normalize_title("{Foo} Bar") == _normalize_title("Foo Bar")
+
+
+def test_latex_dollar_escape():
+    bib = r"Fixing 55 out of 105 bugs for \$8 each"
+    ss  = "Fixing 55 out of 105 bugs for $8 each"
+    assert _normalize_title(bib) == _normalize_title(ss)

@@ -35,3 +35,23 @@ def test_check_misc_url_no_title(mock_fetch):
     mock_fetch.return_value = ""
     with pytest.raises(MiscEntryError, match="No <title>"):
         check_misc_url("https://example.com", "Some Title")
+
+
+@patch("check_hallucinations.main._fetch_page_title")
+def test_check_misc_url_colon_uses_subtitle(mock_fetch):
+    # Page shows only the subtitle; the "Main: " prefix is not in the HTML title
+    mock_fetch.return_value = "The Official Leaderboard | SWE-bench"
+    check_misc_url(
+        "https://www.swebench.com",
+        "SWE-bench: The Official Leaderboard",
+    )
+
+
+@patch("check_hallucinations.main._fetch_page_title")
+def test_check_misc_url_colon_wrong_subtitle(mock_fetch):
+    mock_fetch.return_value = "Some Unrelated Page Title"
+    with pytest.raises(MiscEntryError, match="Title does not match"):
+        check_misc_url(
+            "https://example.com",
+            "My Blog: Adventures in Python",
+        )
