@@ -11,6 +11,7 @@ import re
 import time
 import unicodedata
 
+import keyring
 import requests
 from bibtexparser.bparser import BibTexParser
 
@@ -19,7 +20,7 @@ CACHE_DIR = os.path.expanduser("~/.cache/check-hallucinations")
 
 
 def _api_key():
-    key = os.environ.get("SEMANTICSCHOLAR_API_KEY", "")
+    key = os.environ.get("SEMANTICSCHOLAR_API_KEY") or keyring.get_password("check-hallucinations", "ss_api_key") or ""
     return {"x-api-key": key} if key else {}
 
 
@@ -149,14 +150,31 @@ def _ss_search(title):
         "https://api.semanticscholar.org/graph/v1/paper/search"
         "?query=" + query + "&fields=title,paperId&limit=5"
     )
-    resp = requests.get(url, headers=_api_key())
-    time.sleep(SEMANTICSCHOLAR_DELAY)
-    if resp.status_code != 200:
-        return []
-    results = resp.json().get("data", [])
-    with open(fname, "w") as f:
-        json.dump(results, f)
-    return results
+    for wait in [5, 15, 30]:
+        resp = requests.get(url, headers=_api_key())
+        if resp.status_code == 429:
+            time.sleep(wait)
+            continue
+        time.sleep(SEMANTICSCHOLAR_DELAY)
+        if resp.status_code != 200:
+            return []
+        results = resp.json().get("data", [])
+        with open(fname, "w") as f:
+            json.dump(results, f)
+        return results
+    return []
+
+
+def _first_author_last_name(author_field):
+    if not author_field:
+        return None
+    first = author_field.split(" and ")[0].strip()
+    # "Last, First" BibTeX format
+    if "," in first:
+        return first.split(",")[0].strip()
+    # "First Last" format
+    parts = first.split()
+    return parts[-1] if parts else None
 
 
 def _title_matches(ss_title, bib_title):
@@ -197,13 +215,20 @@ def _url_for_paper(result):
     return "https://www.semanticscholar.org/paper/" + result["paperId"]
 
 
-def get_url_from_title(title):
+def get_url_from_title(title, entry=None):
     # Fast path: /match endpoint
     result = _ss_match(title)
     if result and "paperId" in result and _title_matches(result["title"], title):
         return _url_for_paper(result)
 
-    # Fallback: /search endpoint, scan first few results
+    # Retry /match augmented with first author last name (handles short/ambiguous titles)
+    author = _first_author_last_name((entry or {}).get("author", ""))
+    if author:
+        result2 = _ss_match(title + " " + author)
+        if result2 and "paperId" in result2 and _title_matches(result2["title"], title):
+            return _url_for_paper(result2)
+
+    # Last resort: /search endpoint, scan first few results
     for candidate in _ss_search(title):
         if "paperId" in candidate and _title_matches(candidate["title"], title):
             return _url_for_paper(candidate)
@@ -248,7 +273,7 @@ def process_bibtex_file(filepath):
             continue
 
         try:
-            url = get_url_from_title(title)
+            url = get_url_from_title(title, entry)
             print(f"\nEntry {i}/{len(bib_database.entries)}: {title}")
             print(f"URL: {url}")
         except Exception as e:
