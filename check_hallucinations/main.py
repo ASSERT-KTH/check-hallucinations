@@ -107,7 +107,8 @@ def get_url_from_title(title):
     result = _get_semantic_scholar_id_from_title(title)
     if not result or "paperId" not in result:
         raise SemanticScholarNotFound("No data found for title: " + title)
-    if _normalize_title(result["title"]) == _normalize_title(title):
+    ss_main = _normalize_title(result["title"].split(":")[0])
+    if _normalize_title(result["title"]) == _normalize_title(title) or ss_main == _normalize_title(title):
         data = _get_paper_info(result["paperId"])
         if "externalIds" in data:
             if "DOI" in data["externalIds"]:
