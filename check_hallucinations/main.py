@@ -112,7 +112,8 @@ class SemanticScholarNotFound(Exception):
     pass
 
 
-def _get_semantic_scholar_id_from_title(title):
+def _ss_match(title):
+    """Call the /match endpoint; returns a single {paperId, title} or None."""
     fname = _cache_path("title_to_id", _normalize_title(title))
     if os.path.exists(fname):
         try:
@@ -121,7 +122,7 @@ def _get_semantic_scholar_id_from_title(title):
         except Exception:
             os.remove(fname)
 
-    query = title.replace(":", "").replace("’", "").replace("'", "")
+    query = title.replace("’", "").replace("’", "")
     url = "https://api.semanticscholar.org/graph/v1/paper/search/match?query=" + query
     resp = requests.get(url, headers=_api_key())
     time.sleep(SEMANTICSCHOLAR_DELAY)
@@ -129,11 +130,41 @@ def _get_semantic_scholar_id_from_title(title):
         return None
     data = resp.json()
     if "data" not in data:
-        raise SemanticScholarNotFound("not found in SemanticScholar: " + title)
+        return None
     result = data["data"][0]
     with open(fname, "w") as f:
         json.dump(result, f)
     return result
+
+
+def _ss_search(title):
+    """Call the /search endpoint; returns a list of up to 5 {paperId, title}."""
+    fname = _cache_path("search_results", _normalize_title(title))
+    if os.path.exists(fname):
+        with open(fname) as f:
+            return json.load(f)
+
+    query = title.replace("’", "").replace("’", "")
+    url = (
+        "https://api.semanticscholar.org/graph/v1/paper/search"
+        "?query=" + query + "&fields=title,paperId&limit=5"
+    )
+    resp = requests.get(url, headers=_api_key())
+    time.sleep(SEMANTICSCHOLAR_DELAY)
+    if resp.status_code != 200:
+        return []
+    results = resp.json().get("data", [])
+    with open(fname, "w") as f:
+        json.dump(results, f)
+    return results
+
+
+def _title_matches(ss_title, bib_title):
+    ss_main = _normalize_title(ss_title.split(":")[0])
+    return (
+        _normalize_title(ss_title) == _normalize_title(bib_title)
+        or ss_main == _normalize_title(bib_title)
+    )
 
 
 def _get_paper_info(paper_id):
@@ -153,29 +184,35 @@ def _get_paper_info(paper_id):
     return data
 
 
+def _url_for_paper(result):
+    data = _get_paper_info(result["paperId"])
+    if "externalIds" in data:
+        if "DOI" in data["externalIds"]:
+            try:
+                return _get_doi_target(data["externalIds"]["DOI"])
+            except Exception:
+                return "https://doi.org/" + data["externalIds"]["DOI"]
+        if "ArXiv" in data["externalIds"]:
+            return "https://arxiv.org/abs/" + data["externalIds"]["ArXiv"]
+    return "https://www.semanticscholar.org/paper/" + result["paperId"]
+
+
 def get_url_from_title(title):
-    result = _get_semantic_scholar_id_from_title(title)
-    if not result or "paperId" not in result:
-        raise SemanticScholarNotFound("No data found for title: " + title)
-    ss_main = _normalize_title(result["title"].split(":")[0])
-    if _normalize_title(result["title"]) == _normalize_title(title) or ss_main == _normalize_title(title):
-        data = _get_paper_info(result["paperId"])
-        if "externalIds" in data:
-            if "DOI" in data["externalIds"]:
-                try:
-                    return _get_doi_target(data["externalIds"]["DOI"])
-                except Exception:
-                    return "https://doi.org/" + data["externalIds"]["DOI"]
-            elif "ArXiv" in data["externalIds"]:
-                return "https://arxiv.org/abs/" + data["externalIds"]["ArXiv"]
-            return "https://www.semanticscholar.org/paper/" + result["paperId"]
-        return "https://www.semanticscholar.org/paper/" + result["paperId"]
-    raise SemanticScholarNotFound(
-        "Title does not match: "
-        + title
-        + " vs "
-        + result["title"]
-    )
+    # Fast path: /match endpoint
+    result = _ss_match(title)
+    if result and "paperId" in result and _title_matches(result["title"], title):
+        return _url_for_paper(result)
+
+    # Fallback: /search endpoint, scan first few results
+    for candidate in _ss_search(title):
+        if "paperId" in candidate and _title_matches(candidate["title"], title):
+            return _url_for_paper(candidate)
+
+    if result and "paperId" in result:
+        raise SemanticScholarNotFound(
+            "Title does not match: " + title + " vs " + result["title"]
+        )
+    raise SemanticScholarNotFound("not found in SemanticScholar: " + title)
 
 
 def process_bibtex_file(filepath):
