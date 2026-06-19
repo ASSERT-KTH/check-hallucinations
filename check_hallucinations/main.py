@@ -7,7 +7,6 @@ import argparse
 import hashlib
 import json
 import os
-import re
 import time
 import unicodedata
 
@@ -44,14 +43,6 @@ def _normalize_title(title):
         .replace("‑", "")
         .replace(" ...", "...")
     )
-
-
-def _title_word_jaccard(a, b):
-    wa = set(re.split(r'[-\s?!,.:;]+', a.lower())) - {""}
-    wb = set(re.split(r'[-\s?!,.:;]+', b.lower())) - {""}
-    if not wa or not wb:
-        return 0.0
-    return len(wa & wb) / len(wa | wb)
 
 
 def _cache_path(subdir, key):
@@ -118,8 +109,7 @@ def get_url_from_title(title):
     if not result or "paperId" not in result:
         raise SemanticScholarNotFound("No data found for title: " + title)
     ss_main = _normalize_title(result["title"].split(":")[0])
-    similar_enough = _title_word_jaccard(result["title"], title) >= 0.85
-    if _normalize_title(result["title"]) == _normalize_title(title) or ss_main == _normalize_title(title) or similar_enough:
+    if _normalize_title(result["title"]) == _normalize_title(title) or ss_main == _normalize_title(title):
         data = _get_paper_info(result["paperId"])
         if "externalIds" in data:
             if "DOI" in data["externalIds"]:
