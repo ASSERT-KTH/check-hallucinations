@@ -66,6 +66,43 @@ def _get_doi_target(doi):
     return response.url
 
 
+_ARXIV_ID_RE = re.compile(r'(?:arXiv[:\s]+|arxiv\.org/(?:abs|pdf|html)/)(\d{4}\.\d{4,5}(?:v\d+)?)', re.IGNORECASE)
+
+
+def _detect_arxiv_id(entry):
+    """Return the arXiv ID string if the entry looks like an arXiv paper, else None."""
+    for field in ('howpublished', 'journal', 'eprint', 'url', 'note'):
+        val = entry.get(field, '')
+        if val:
+            m = _ARXIV_ID_RE.search(val)
+            if m:
+                return m.group(1)
+    return None
+
+
+def check_arxiv(arxiv_id, bib_title):
+    fname = _cache_path("arxiv", arxiv_id)
+    if os.path.exists(fname):
+        with open(fname) as f:
+            api_title = json.load(f)["title"]
+    else:
+        url = f"http://export.arxiv.org/api/query?id_list={arxiv_id}"
+        resp = requests.get(url, timeout=15, headers={"User-Agent": "check-hallucinations/1.0"})
+        resp.raise_for_status()
+        # arxiv API wraps entries in <entry><title>…</title>; first <title> is feed title
+        titles = re.findall(r'<title>(.*?)</title>', resp.text, re.DOTALL)
+        if len(titles) < 2:
+            raise MiscEntryError(f"arXiv ID not found: {arxiv_id}")
+        api_title = titles[1].strip().replace('\n', ' ')
+        with open(fname, "w") as f:
+            json.dump({"title": api_title}, f)
+
+    if not _title_matches(api_title, bib_title):
+        raise MiscEntryError(
+            f"arXiv title mismatch: bib={bib_title!r} arxiv={api_title!r}"
+        )
+
+
 class MiscEntryError(Exception):
     pass
 
@@ -103,7 +140,7 @@ def check_misc_url(url, bib_title):
     search_title = bib_title.split(":", 1)[1].strip() if ":" in bib_title else bib_title
     norm_bib = _normalize_title(search_title)
     norm_page = _normalize_title(page_title)
-    if norm_bib not in norm_page:
+    if norm_bib not in norm_page and norm_page not in norm_bib:
         raise MiscEntryError(
             f"Title does not match page: {bib_title!r} not found in {page_title!r}"
         )
@@ -256,8 +293,19 @@ def process_bibtex_file(filepath):
         if title:
             title = " ".join(title.replace("{", "").replace("}", "").split())
 
-        # misc entries without eprint are web references — check URL and title
+        # misc entries without eprint are web references or arXiv preprints
         if entry.get("eprint") is None and entry.get('ENTRYTYPE') == 'misc':
+            arxiv_id = _detect_arxiv_id(entry)
+            if arxiv_id:
+                try:
+                    check_arxiv(arxiv_id, title)
+                    print(f"\nArXiv {i}/{len(bib_database.entries)}: {title}")
+                    print(f"URL: https://arxiv.org/abs/{arxiv_id}")
+                except Exception as e:
+                    print(e)
+                    print(f"\033[91m\nHallucinated ArXiv {i}/{len(bib_database.entries)}: {title}\033[0m")
+                continue
+
             howpublished = entry.get('howpublished', '')
             url = _extract_url(howpublished)
             if not url:
