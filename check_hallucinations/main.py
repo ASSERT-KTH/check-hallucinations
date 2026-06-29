@@ -215,11 +215,30 @@ def _first_author_last_name(author_field):
 
 
 def _title_matches(ss_title, bib_title):
+    norm_ss = _normalize_title(ss_title)
+    norm_bib = _normalize_title(bib_title)
+
+    # Exact match (handles different separators, diacritics, braces, etc.)
+    if norm_ss == norm_bib:
+        return True
+
+    # Check if the SS main title (part before colon) matches the full bib title.
+    # Handles case where bib title omits the subtitle.
     ss_main = _normalize_title(ss_title.split(":")[0])
-    return (
-        _normalize_title(ss_title) == _normalize_title(bib_title)
-        or ss_main == _normalize_title(bib_title)
-    )
+    if ss_main == norm_bib:
+        return True
+
+    # Check if the bib main title (part before colon) matches the full SS title.
+    # Handles case where SS title omits the subtitle.
+    bib_main = _normalize_title(bib_title.split(":")[0])
+    if bib_main == norm_ss:
+        return True
+
+    # Prefix match — handles trailing artefacts appended by some sources (e.g. ☆).
+    if norm_ss.startswith(norm_bib) or norm_bib.startswith(norm_ss):
+        return True
+
+    return False
 
 
 def _get_paper_info(paper_id):

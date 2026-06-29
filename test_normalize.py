@@ -1,4 +1,4 @@
-from check_hallucinations.main import _normalize_title
+from check_hallucinations.main import _normalize_title, _title_matches
 
 
 def test_colon_vs_period_subtitle():
@@ -30,3 +30,48 @@ def test_double_dash_vs_single_dash():
     bib = "DeepSeek-Coder: When the large language model meets programming -- the rise of code intelligence"
     ss  = "DeepSeek-Coder: When the Large Language Model Meets Programming - The Rise of Code Intelligence"
     assert _normalize_title(bib) == _normalize_title(ss)
+
+
+def test_title_matches_exact():
+    assert _title_matches(
+        "Forest before trees: The precedence of global features in visual perception",
+        "Forest before trees: The precedence of global features in visual perception",
+    )
+
+
+def test_title_matches_trailing_star():
+    # Semantic Scholar sometimes appends ☆ to titles
+    assert _title_matches(
+        "Forest before trees: The precedence of global features in visual perception ☆",
+        "Forest before trees: The precedence of global features in visual perception",
+    )
+
+
+def test_title_matches_ss_main_only():
+    # SS returns only main title, bib has full title with subtitle
+    assert _title_matches(
+        "Forest before trees",
+        "Forest before trees: The precedence of global features in visual perception",
+    )
+
+
+def test_title_matches_bib_main_only():
+    # Bib has only main title, SS returns full title with subtitle
+    assert _title_matches(
+        "Forest before trees: The precedence of global features in visual perception",
+        "Forest before trees",
+    )
+
+
+def test_title_matches_period_vs_colon():
+    assert _title_matches(
+        "Forest before trees. The precedence of global features in visual perception",
+        "Forest before trees: The precedence of global features in visual perception",
+    )
+
+
+def test_title_matches_different():
+    assert not _title_matches(
+        "Something completely different",
+        "Forest before trees: The precedence of global features in visual perception",
+    )
