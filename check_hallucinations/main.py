@@ -48,6 +48,8 @@ def _normalize_title(title):
         .replace(" ", " ")
         .replace("‐", "")
         .replace("‑", "")
+        .replace("·", "-")
+        .replace(" - ", "-")
         .replace(" ...", "...")
     )
 
@@ -328,7 +330,7 @@ def process_bibtex_file(filepath):
             howpublished = entry.get('howpublished', '')
             url = _extract_url(howpublished)
             if not url:
-                print(f"\033[91m\nURL with no URL {i}/{len(bib_database.entries)}: {title}\033[0m")
+                print(f"\033[93m\nInternet resource with no URL {i}/{len(bib_database.entries)}: {title}\033[0m")
             else:
                 try:
                     check_misc_url(url, title)
