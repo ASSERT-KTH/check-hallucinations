@@ -109,6 +109,10 @@ class MiscEntryError(Exception):
     pass
 
 
+def _report_bug():
+    print("  If the paper truly exists in https://www.semanticscholar.org/ report a bug at https://github.com/ASSERT-KTH/check-hallucinations/ else report a bug at feedback@semanticscholar.org")
+
+
 def _extract_url(howpublished):
     m = re.search(r'\\url\{([^}]+)\}', howpublished)
     if m:
@@ -325,6 +329,7 @@ def process_bibtex_file(filepath):
                 except Exception as e:
                     print(e)
                     print(f"\033[91m\nHallucinated ArXiv {i}/{len(bib_database.entries)}: {title}\033[0m")
+                    _report_bug()
                 continue
 
             howpublished = entry.get('howpublished', '')
@@ -339,6 +344,7 @@ def process_bibtex_file(filepath):
                 except Exception as e:
                     print(e)
                     print(f"\033[91m\nHallucinated Misc {i}/{len(bib_database.entries)}: {title}\033[0m")
+                    _report_bug()
             continue
 
         try:
@@ -348,6 +354,7 @@ def process_bibtex_file(filepath):
         except Exception as e:
             print(e)
             print(f"\033[91m\nHallucinated Entry {i}/{len(bib_database.entries)}: {title}\033[0m")
+            _report_bug()
 
 
 def main():
