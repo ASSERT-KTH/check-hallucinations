@@ -1,7 +1,10 @@
-name: Upload Package to PyPI
-# authorization handled via trusted publishers, see https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/
+name: Check and Publish
+
 on:
   push:
+    branches:
+      - main
+  pull_request:
     branches:
       - main
 
@@ -9,7 +12,21 @@ permissions:
   contents: read
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+    - name: Set up Python
+      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+      with:
+        python-version: '3.x'
+    - run: pip install .
+    - run: pip install pytest
+    - run: pytest -v
+
   deploy:
+    needs: test
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       id-token: write
