@@ -70,6 +70,13 @@ def test_title_matches_period_vs_colon():
     )
 
 
+def test_hyphenated_compound_word():
+    # Semantic Scholar sometimes hyphenates compound words that bib titles don't
+    bib = "Representation Engineering for Large Language Models: Survey and Research Challenges"
+    ss  = "Representation Engineering for Large-Language Models: Survey and Research Challenges"
+    assert _title_matches(ss, bib)
+
+
 def test_title_matches_different():
     assert not _title_matches(
         "Something completely different",

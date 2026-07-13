@@ -50,6 +50,7 @@ def _normalize_title(title):
         .replace("‑", "")
         .replace("·", "-")
         .replace(" - ", "-")
+        .replace("-", " ")
         .replace(" ...", "...")
     )
 
