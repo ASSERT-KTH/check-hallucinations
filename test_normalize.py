@@ -36,6 +36,12 @@ def test_latex_quotes_match_semantic_scholar_quotes():
     )
 
 
+def test_quote_preserves_word_boundary_for_missing_api_space():
+    bib = "On LLMs' Internal Representation of Code Correctness"
+    ss = "On LLMs'Internal Representation of Code Correctness"
+    assert _title_matches(ss, bib)
+
+
 def test_double_dash_vs_single_dash():
     bib = "DeepSeek-Coder: When the large language model meets programming -- the rise of code intelligence"
     ss  = "DeepSeek-Coder: When the Large Language Model Meets Programming - The Rise of Code Intelligence"

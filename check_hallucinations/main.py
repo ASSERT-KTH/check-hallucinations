@@ -18,10 +18,12 @@ from bibtexparser.bparser import BibTexParser
 SEMANTICSCHOLAR_DELAY = 1.0
 CACHE_DIR = os.path.expanduser("~/.cache/check-hallucinations")
 
-# Quotes are typographical decoration for title matching.  Removing them also
-# makes BibTeX's TeX-style ``...'' quotes compare equal to straight or curly
-# quotes returned by external APIs.
-_TITLE_QUOTE_TRANSLATION = str.maketrans("", "", "`'\"\u2018\u2019\u201c\u201d")
+# Quotes are typographical decoration for title matching.  Treating them as
+# word boundaries makes BibTeX's TeX-style ``...'' quotes compare equal to
+# straight or curly quotes, including API metadata missing a space after one.
+_TITLE_QUOTE_TRANSLATION = str.maketrans(
+    {quote: " " for quote in "`'\"\u2018\u2019\u201c\u201d"}
+)
 
 
 def _api_key():
@@ -34,7 +36,7 @@ def _strip_diacritics(s):
 
 
 def _normalize_title(title):
-    return _strip_diacritics(
+    normalized = _strip_diacritics(
         title.lower()
         .strip()
         .translate(_TITLE_QUOTE_TRANSLATION)
@@ -46,8 +48,6 @@ def _normalize_title(title):
         .replace("\\#", "#")
         .replace(": ", ". ")
         .replace(",", " ")
-        .replace("   ", " ")
-        .replace("  ", " ")
         .replace("{", "")
         .replace("}", "")
         .replace(" ", " ")
@@ -58,6 +58,7 @@ def _normalize_title(title):
         .replace("-", " ")
         .replace(" ...", "...")
     )
+    return " ".join(normalized.split())
 
 
 def _cache_path(subdir, key):
