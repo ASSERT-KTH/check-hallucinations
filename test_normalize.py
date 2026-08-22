@@ -26,6 +26,16 @@ def test_latex_dollar_escape():
     assert _normalize_title(bib) == _normalize_title(ss)
 
 
+def test_latex_quotes_match_semantic_scholar_quotes():
+    bib = "Predicting Program Properties from ``Big Code''"
+    assert _title_matches(
+        'Predicting Program Properties from "Big Code"', bib
+    )
+    assert _title_matches(
+        "Predicting program properties from 'big code'", bib
+    )
+
+
 def test_double_dash_vs_single_dash():
     bib = "DeepSeek-Coder: When the large language model meets programming -- the rise of code intelligence"
     ss  = "DeepSeek-Coder: When the Large Language Model Meets Programming - The Rise of Code Intelligence"
