@@ -98,3 +98,13 @@ def test_title_matches_different():
         "Something completely different",
         "Forest before trees: The precedence of global features in visual perception",
     )
+
+
+def test_space_before_colon():  # "Dynamic Error Remediation : A Case Study" in Semantic Scholar
+    assert _title_matches("Dynamic Error Remediation : A Case Study with Null Pointer Exceptions",
+                          "Dynamic Error Remediation: A Case Study with Null Pointer Exceptions")
+
+
+def test_question_mark_colon():
+    assert _title_matches("How to Design a Program Repair Bot? Insights from the Repairnator Project",
+                          "How to design a program repair bot?: insights from the repairnator project")
