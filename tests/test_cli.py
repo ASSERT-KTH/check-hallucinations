@@ -156,3 +156,13 @@ def test_rate_limit_retried_then_unchecked(monkeypatch):
     monkeypatch.setattr(m.time, "sleep", lambda s: None)
     with pytest.raises(m.Unchecked, match="429"):
         m._ss_get("https://api.semanticscholar.org/x")
+
+
+def test_no_keyring_backend_means_public_api(monkeypatch):  # CI, servers: no crash
+    def no_backend(*args):
+        raise m.keyring.errors.NoKeyringError("No recommended backend was available")
+    monkeypatch.delenv("SEMANTICSCHOLAR_API_KEY", raising=False)
+    monkeypatch.setattr(m.keyring, "get_password", no_backend)
+    assert m._api_key() == {}
+    monkeypatch.setenv("SEMANTICSCHOLAR_API_KEY", "k")
+    assert m._api_key() == {"x-api-key": "k"}

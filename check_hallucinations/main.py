@@ -17,6 +17,7 @@ from dataclasses import field as dataclass_field
 
 import bibtexparser
 import keyring
+import keyring.errors
 import requests
 
 from . import _metadata
@@ -33,7 +34,12 @@ _TITLE_QUOTE_TRANSLATION = str.maketrans(
 
 
 def _api_key():
-    key = os.environ.get("SEMANTICSCHOLAR_API_KEY") or keyring.get_password("check-hallucinations", "ss_api_key") or ""
+    key = os.environ.get("SEMANTICSCHOLAR_API_KEY")
+    if not key:
+        try:
+            key = keyring.get_password("check-hallucinations", "ss_api_key")
+        except keyring.errors.KeyringError:  # no keyring backend (CI, servers): the public API
+            key = None
     return {"x-api-key": key} if key else {}
 
 
