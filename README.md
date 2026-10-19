@@ -2,7 +2,9 @@
 
 A command-line tool to detect hallucinated references in BibTeX files before submitting a paper to arXiv.
 
-It looks up each reference ([Semantic Scholar](https://www.semanticscholar.org/), arXiv, the web page of a `@misc`), and checks that the paper found is the one the entry describes: same title, same authors, same year, and a DOI that resolves to that title.
+It looks up each reference ([Semantic Scholar](https://www.semanticscholar.org/), then [OpenAlex](https://openalex.org/) when Semantic Scholar has no matching title; arXiv; the web page of a `@misc`), and checks that the paper found is the one the entry describes: same title, same authors, same year, and a DOI that resolves to that title.
+
+Titles are compared whatever their punctuation and markup: `&`, `#`, `+`, `%`, `?`, `:`, parentheses, quotes, dashes, LaTeX accents and commands (`D\&C`, `C\#`, `Bissyand{\'e}`, `\emph{x}`), and venue names that some records prefix to the title. Symbols that change the meaning stay: `C`, `C++` and `C#` are different titles.
 
 ## Installation
 
@@ -61,8 +63,11 @@ Answers are cached in `~/.cache/check-hallucinations`.
 
 ```bash
 uv venv && uv pip install -e '.[dev]'
-.venv/bin/pytest && .venv/bin/ruff check . && .venv/bin/mypy check_hallucinations tests
+.venv/bin/pytest && .venv/bin/ruff check . && .venv/bin/mypy check_hallucinations tests scripts
+.venv/bin/python scripts/live_check.py [more-real.bib ...]   # network: silent when the lookup is right
 ```
+
+The live check runs the lookup on `scripts/corpus/real/` (real papers with difficult titles: every entry must be confirmed) and `scripts/corpus/invented/` (every entry must be reported). Add a title that the tool gets wrong to the corpus before fixing it.
 
 ## License
 

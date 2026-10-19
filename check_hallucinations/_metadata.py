@@ -59,7 +59,8 @@ def authors_mismatch(author_field: str, found_names: list[str]) -> str | None:
     found_plain = [_plain(n) for n in found_names if n]
     if not bib or not found_plain:
         return None
-    found = {_last_word(n) for n in found_plain} | set(found_plain)
+    # Any word of a found name: some records reverse the order ("Monperrus Martin").
+    found = {w for n in found_plain for w in n.replace("-", " ").split()} | set(found_plain)
     present = [b for b in bib if _matches(b, found)]
     if not _matches(bib[0], found):
         return f"first author {bib[0]} is not an author"

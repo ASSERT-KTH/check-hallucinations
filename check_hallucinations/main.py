@@ -48,6 +48,9 @@ def _strip_diacritics(s):
 
 
 def _normalize_title(title):
+    title = _query_text(title)
+    # Brackets, dashes and "&" are typography: "(NIER track)" is ": NIER track" elsewhere.
+    title = re.sub(r"[()\[\]–—]", " ", title).replace("&", " and ")
     normalized = _strip_diacritics(
         title.lower()
         .strip()
@@ -217,11 +220,11 @@ class Unchecked(Exception):
 SS_RETRY_WAITS = [5, 15, 30]
 
 
-def _ss_get(url):
+def _ss_get(url, params=None):
     """GET a Semantic Scholar URL, retrying on 429; Unchecked when it never answers."""
     for wait in [*SS_RETRY_WAITS, None]:
         try:
-            resp = requests.get(url, headers=_api_key(), timeout=30)
+            resp = requests.get(url, params=params, headers=_api_key(), timeout=30)
         except requests.RequestException as e:
             raise Unchecked(f"Semantic Scholar unreachable: {e}") from e
         if resp.status_code == 429 and wait is not None:
@@ -234,9 +237,25 @@ def _ss_get(url):
     raise AssertionError("unreachable")
 
 
+def _query_text(title):
+    """A title as a search query: LaTeX removed (`D\\&C` → `D&C`, `{\\'e}` → `e`, `\\emph{x}` → `x`)."""
+    s = re.sub(r"\\([&%#$_])", r"\1", title)
+    s = re.sub(r"\\[\"'`^~=.uvHcdbtk](?![A-Za-z])\s*|\\[\"'`^~=.]", "", s)  # accents
+    s = re.sub(r"\\[A-Za-z]+\*?\s*", "", s)
+    s = s.replace("{", "").replace("}", "").replace("~", " ").replace("’", "'")
+    return " ".join(s.split())
+
+
+# Cache directories of /match and /search answers. Until 0.21 the query was concatenated into
+# the URL unencoded (`&` started a new parameter, `#` cut the URL): answers cached then are for
+# another query, so the key carries a version.
+SS_MATCH_CACHE = "title_to_id_v2"
+SS_SEARCH_CACHE = "search_results_v2"
+
+
 def _ss_match(title):
     """Call the /match endpoint; returns a single {paperId, title} or None."""
-    fname = _cache_path("title_to_id", _normalize_title(title))
+    fname = _cache_path(SS_MATCH_CACHE, _normalize_title(title))
     if os.path.exists(fname):
         try:
             with open(fname) as f:
@@ -244,9 +263,8 @@ def _ss_match(title):
         except Exception:
             os.remove(fname)
 
-    query = title.replace("’", "").replace("’", "")
-    url = "https://api.semanticscholar.org/graph/v1/paper/search/match?query=" + query
-    resp = _ss_get(url)
+    url = "https://api.semanticscholar.org/graph/v1/paper/search/match"
+    resp = _ss_get(url, {"query": _query_text(title)})
     if resp.status_code != 200:
         return None
     data = resp.json()
@@ -260,17 +278,15 @@ def _ss_match(title):
 
 def _ss_search(title):
     """Call the /search endpoint; returns a list of up to 5 {paperId, title}."""
-    fname = _cache_path("search_results", _normalize_title(title))
+    fname = _cache_path(SS_SEARCH_CACHE, _normalize_title(title))
     if os.path.exists(fname):
         with open(fname) as f:
             return json.load(f)
 
-    query = title.replace("’", "").replace("’", "")
-    url = (
-        "https://api.semanticscholar.org/graph/v1/paper/search"
-        "?query=" + query + "&fields=title,paperId&limit=5"
-    )
-    resp = _ss_get(url)
+    # /search finds nothing for hyphenated terms (Semantic Scholar API documentation)
+    query = _query_text(title).replace("-", " ")
+    url = "https://api.semanticscholar.org/graph/v1/paper/search"
+    resp = _ss_get(url, {"query": query, "fields": "title,paperId", "limit": 5})
     if resp.status_code != 200:
         return []
     results = resp.json().get("data", [])
@@ -315,7 +331,22 @@ def _title_matches(ss_title, bib_title):
     if norm_ss.startswith(norm_bib) or norm_bib.startswith(norm_ss):
         return True
 
+    # Suffix match — some records prefix the venue to the title ("Usenix Association 8th
+    # Usenix Symposium ... Deadlock immunity: ..."). Only a prefix that names a venue: "A survey
+    # on contextual multi-armed bandits" is another paper than "Contextual Multi-Armed Bandits".
+    # Short titles are excluded: "Learning to Repair" can be the name of a proceedings volume.
+    if (len(norm_bib.split()) >= MIN_SUFFIX_WORDS and norm_ss.endswith(" " + norm_bib)
+            and VENUE.search(norm_ss[: -len(norm_bib)])):
+        return True
+
     return False
+
+
+MIN_SUFFIX_WORDS = 4
+
+
+VENUE = re.compile(r"\b(?:proceedings|symposium|conference|workshop|transactions|journal|association"
+                   r"|ieee|acm|usenix|\d+(?:st|nd|rd|th))\b")
 
 
 def _get_paper_info(paper_id):
@@ -484,16 +515,66 @@ MAX_CANDIDATES = 5
 def _metadata_problems(entry, paper):
     """(rule, message) for each way the entry's authors and year are not those of `paper`."""
     info = _get_paper_info(paper["paperId"])
-    problems = []
     names = [a.get("name", "") for a in info.get("authors") or []]
+    return _problems(entry, names, info.get("year"))
+
+
+def _problems(entry, names, found_year):
+    """(rule, message) for each way the entry's authors and year are not `names` and `found_year`."""
+    problems = []
     why = _metadata.authors_mismatch(entry.get("author", ""), names)
     if why:
         shown = ", ".join(names[:4]) + (", ..." if len(names) > 4 else "")
         problems.append(("authors-mismatch", f"{why}; the paper is by {shown}"))
-    why = _metadata.year_mismatch(entry.get("year"), info.get("year"))
+    why = _metadata.year_mismatch(entry.get("year"), found_year)
     if why:
         problems.append(("year-mismatch", why))
     return problems
+
+
+OPENALEX_CACHE = "openalex_search"
+
+
+def _openalex_works(title):
+    """OpenAlex works found for a title, as {title, authors, year, url}; Unchecked when unreachable.
+
+    The fallback when Semantic Scholar has no matching title (DBLP's API is behind a bot
+    challenge). Cached, including empty answers.
+    """
+    fname = _cache_path(OPENALEX_CACHE, _normalize_title(title))
+    if os.path.exists(fname):
+        with open(fname) as f:
+            return json.load(f)
+    try:
+        resp = requests.get("https://api.openalex.org/works", timeout=30,
+                            params={"search": _query_text(title), "per-page": 5,
+                                    "mailto": "check-hallucinations@users.noreply.github.com"})
+    except requests.RequestException as e:
+        raise Unchecked(f"OpenAlex unreachable: {e}") from e
+    if resp.status_code != 200:
+        raise Unchecked(f"OpenAlex answered HTTP {resp.status_code}")
+    works = []
+    for w in resp.json().get("results", []):
+        works.append({
+            "title": w.get("display_name") or "",
+            "authors": [a.get("author", {}).get("display_name", "") for a in w.get("authorships", [])],
+            "year": w.get("publication_year"),
+            "url": w.get("doi") or w.get("id"),
+        })
+    with open(fname, "w") as f:
+        json.dump(works, f)
+    return works
+
+
+def _openalex_paper(entry, title):
+    """The OpenAlex work for the entry and its problems, or None: the title must match, and the
+    first work whose authors are the entry's is preferred."""
+    matching = [w for w in _openalex_works(title) if w["title"] and _title_matches(w["title"], title)]
+    scored = [(w, _problems(entry, w["authors"], w["year"])) for w in matching]
+    for w, problems in scored:
+        if not any(rule == "authors-mismatch" for rule, _ in problems):
+            return w, problems
+    return scored[0] if scored else None
 
 
 def _best_paper(entry, candidates):
@@ -573,9 +654,20 @@ def check_entry(entry):
         candidates = _candidates(title, entry)
         paper = next(candidates)
     except SemanticScholarNotFound as e:
+        try:
+            found = _openalex_paper(entry, title)
+        except Unchecked:
+            found = None  # Semantic Scholar's answer stands
+        if found:
+            work, problems = found
+            result.url = work["url"]
+            for rule, message in problems:
+                result.add(entry, rule, message)
+            _check_doi(entry, result)
+            return result
         result.error = str(e)
         rule = "title-mismatch" if str(e).startswith("Title does not match") else "not-found"
-        result.add(entry, rule, str(e))
+        result.add(entry, rule, f"{e} (nor in OpenAlex)")
         _check_doi(entry, result)
         return result
     except Exception as e:

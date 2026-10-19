@@ -47,7 +47,7 @@ def doi(d):
 @pytest.fixture
 def offline():
     with patch.object(m, "_candidates", find), patch.object(m, "_get_paper_info", lambda pid: INFO), \
-            patch.object(m, "_doi_metadata", doi):
+            patch.object(m, "_doi_metadata", doi), patch.object(m, "_openalex_works", lambda t: []):
         yield
 
 

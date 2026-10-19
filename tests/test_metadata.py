@@ -37,6 +37,7 @@ def test_most_authors_absent():
     ("van der Aalst, Wil", ["Wil M. P. van der Aalst"]),     # particle
     ("Smith-Jones, Ann", ["Ann Smith-Jones"]),
     ("Smith, John", []),                                      # nothing to compare with
+    ("Monperrus, Martin", ["Monperrus Martin"]),              # reversed order in the record
 ])
 def test_tolerated(field, names):
     assert authors_mismatch(field, names) is None
