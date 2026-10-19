@@ -11,9 +11,9 @@ import re
 import time
 import unicodedata
 
+import bibtexparser
 import keyring
 import requests
-from bibtexparser.bparser import BibTexParser
 
 SEMANTICSCHOLAR_DELAY = 1.0
 CACHE_DIR = os.path.expanduser("~/.cache/check-hallucinations")
@@ -117,7 +117,8 @@ class MiscEntryError(Exception):
 
 
 def _report_bug():
-    print("  If the paper truly exists in https://www.semanticscholar.org/ report a bug at https://github.com/ASSERT-KTH/check-hallucinations/ else report a bug at feedback@semanticscholar.org")
+    print("  If the paper truly exists in https://www.semanticscholar.org/ report a bug at "
+          "https://github.com/ASSERT-KTH/check-hallucinations/ else report a bug at feedback@semanticscholar.org")
 
 
 def _extract_url(howpublished):
@@ -309,18 +310,32 @@ def get_url_from_title(title, entry=None):
     raise SemanticScholarNotFound("not found in SemanticScholar: " + title)
 
 
+def _parse(text):
+    """The entries of a BibTeX text as dicts: field names lowercased, `ENTRYTYPE` and `ID`.
+
+    @string references are resolved; blocks that do not parse are skipped.
+    """
+    library = bibtexparser.parse_string(text)
+    entries = []
+    for e in library.entries:
+        entry = {f.key.lower(): f.value for f in e.fields}
+        entry["ENTRYTYPE"] = e.entry_type.lower()
+        entry["ID"] = e.key
+        entries.append(entry)
+    return entries
+
+
 def process_bibtex_file(filepath):
     try:
         with open(filepath) as bibtex_file:
-            parser = BibTexParser(interpolate_strings=False)
-            bib_database = parser.parse(bibtex_file.read(), partial=True)
+            entries = _parse(bibtex_file.read())
     except Exception as e:
         print(f"Error reading BibTeX file: {e}")
         return
 
-    print(f"Processing {len(bib_database.entries)} entries from {filepath}")
+    print(f"Processing {len(entries)} entries from {filepath}")
 
-    for i, entry in enumerate(bib_database.entries, 1):
+    for i, entry in enumerate(entries, 1):
         title = entry.get('title', None)
         if title:
             title = " ".join(title.replace("{", "").replace("}", "").split())
@@ -331,36 +346,36 @@ def process_bibtex_file(filepath):
             if arxiv_id:
                 try:
                     check_arxiv(arxiv_id, title)
-                    print(f"\nArXiv {i}/{len(bib_database.entries)}: {title}")
+                    print(f"\nArXiv {i}/{len(entries)}: {title}")
                     print(f"URL: https://arxiv.org/abs/{arxiv_id}")
                 except Exception as e:
                     print(e)
-                    print(f"\033[91m\nHallucinated ArXiv {i}/{len(bib_database.entries)}: {title}\033[0m")
+                    print(f"\033[91m\nHallucinated ArXiv {i}/{len(entries)}: {title}\033[0m")
                     _report_bug()
                 continue
 
             howpublished = entry.get('howpublished', '')
             url = _extract_url(howpublished)
             if not url:
-                print(f"\033[93m\nInternet resource with no URL {i}/{len(bib_database.entries)}: {title}\033[0m")
+                print(f"\033[93m\nInternet resource with no URL {i}/{len(entries)}: {title}\033[0m")
             else:
                 try:
                     check_misc_url(url, title)
-                    print(f"\nMisc {i}/{len(bib_database.entries)}: {title}")
+                    print(f"\nMisc {i}/{len(entries)}: {title}")
                     print(f"URL: {url}")
                 except Exception as e:
                     print(e)
-                    print(f"\033[91m\nHallucinated Misc {i}/{len(bib_database.entries)}: {title}\033[0m")
+                    print(f"\033[91m\nHallucinated Misc {i}/{len(entries)}: {title}\033[0m")
                     _report_bug()
             continue
 
         try:
             url = get_url_from_title(title, entry)
-            print(f"\nEntry {i}/{len(bib_database.entries)}: {title}")
+            print(f"\nEntry {i}/{len(entries)}: {title}")
             print(f"URL: {url}")
         except Exception as e:
             print(e)
-            print(f"\033[91m\nHallucinated Entry {i}/{len(bib_database.entries)}: {title}\033[0m")
+            print(f"\033[91m\nHallucinated Entry {i}/{len(entries)}: {title}\033[0m")
             _report_bug()
 
 

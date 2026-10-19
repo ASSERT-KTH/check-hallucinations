@@ -4,3 +4,9 @@ __pycache__/
 dist/
 build/
 .cache/
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+plan-*.md

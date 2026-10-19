@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "check-hallucinations"
@@ -10,7 +10,7 @@ authors = [
 ]
 description = "Check BibTeX references for hallucinations before submitting a paper to arXiv"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 license = "MIT"
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -19,10 +19,13 @@ classifiers = [
     "Topic :: Text Processing :: Markup :: LaTeX",
 ]
 dependencies = [
-    "bibtexparser",
+    "bibtexparser>=2,<3",
     "keyring",
     "requests",
 ]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-cov", "ruff", "mypy", "types-requests"]
 
 [project.scripts]
 check-hallucinations = "check_hallucinations.main:main"
@@ -30,3 +33,21 @@ check-hallucinations = "check_hallucinations.main:main"
 [project.urls]
 Homepage = "https://github.com/ASSERT-KTH/check-hallucinations"
 "Bug Tracker" = "https://github.com/ASSERT-KTH/check-hallucinations/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["check_hallucinations"]
+
+[tool.hatch.build.targets.sdist]
+include = ["check_hallucinations/", "tests/", "README.md", "LICENSE", "pyproject.toml"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -31,6 +31,13 @@ export SEMANTICSCHOLAR_API_KEY=your-key-here
 check-hallucinations references.bib
 ```
 
+## Development
+
+```bash
+uv venv && uv pip install -e '.[dev]'
+.venv/bin/pytest && .venv/bin/ruff check . && .venv/bin/mypy check_hallucinations tests
+```
+
 ## License
 
 MIT
