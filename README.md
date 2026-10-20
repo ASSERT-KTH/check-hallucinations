@@ -35,7 +35,9 @@ Exit status: 0 every entry confirmed, 1 findings, 2 the file cannot be read. Thi
 
 - `not-found`, `title-mismatch`: no paper with this title (the closest title is given).
 - `authors-mismatch`: the first author is not an author of the paper found, or fewer than half of the authors are. Last names are compared, LaTeX accents and diacritics removed; `and others` is ignored.
-- `year-mismatch`: the year differs from the paper's by more than two (preprint, online-first and issue years differ, and Semantic Scholar may date a later version).
+- `year-mismatch`: the year differs from the paper's by more than two (preprint, online-first and issue years differ, and Semantic Scholar may date a later version). A `@book` dated before the record found is not a mismatch: the record is a later edition or reprint.
+
+A title is shared by reviews, reprints and later papers ("The Concept of Mind" is also the title of reviews of Ryle's book). Among the first five Semantic Scholar candidates with the title, the first with the entry's authors and year is taken, else the first with its authors; when that one still differs from the entry, OpenAlex is asked, and its work is taken if it fits better. `authors-mismatch` and `year-mismatch` are reported only when no candidate fits.
 - `doi-not-found`, `doi-mismatch`: the `doi` field does not exist, or resolves (doi.org, Crossref and DataCite) to another title. A DOI without Crossref or DataCite record (AI Magazine's `10.1609/aimag.*`) exists when the Handle System resolves it, and its title is OpenAlex's.
 - `arxiv-not-found`, `arxiv-mismatch`: an arXiv `@misc` whose identifier does not exist or has another title.
 - `web-mismatch`, `web-not-found`, `no-url`: a web `@misc` whose page shows another title (in its `<title>`, or each colon-separated part of the entry's title as a phrase of its headings and text), is gone, or has no URL (the `url` field, or `howpublished` as plain text or `\url{}`).

@@ -120,7 +120,8 @@ def test_ambiguous_title_takes_the_candidate_with_the_authors(tmp_path, capsys):
         code, _ = run(tmp_path, bib)
     assert (code, capsys.readouterr().out) == (0, "")
     with patch.object(m, "_candidates", lambda t, e=None: iter([other])), \
-            patch.object(m, "_get_paper_info", infos.get), patch.object(m, "_url_for_paper", lambda p: ""):
+            patch.object(m, "_get_paper_info", infos.get), patch.object(m, "_url_for_paper", lambda p: ""), \
+            patch.object(m, "_openalex_works", lambda t: []):
         code, _ = run(tmp_path, bib)
     assert code == 1 and "authors-mismatch" in capsys.readouterr().out  # only the other paper
 

@@ -664,9 +664,19 @@ def _problems(entry, names, found_year):
         shown = ", ".join(names[:4]) + (", ..." if len(names) > 4 else "")
         problems.append(("authors-mismatch", f"{why}; the paper is by {shown}"))
     why = _metadata.year_mismatch(entry.get("year"), found_year)
-    if why:
+    # A book is reprinted and reedited: a record dated after the cited year is a later edition.
+    cited = _metadata.year_of(entry.get("year"))
+    reprint = entry.get("ENTRYTYPE") == "book" and cited is not None and found_year is not None and cited < found_year
+    if why and not reprint:
         problems.append(("year-mismatch", why))
     return problems
+
+
+def _rank(problems):
+    """0 for a candidate that is the entry's paper, 1 when only its year differs, 2 when its authors do."""
+    if not problems:
+        return 0
+    return 2 if any(rule == "authors-mismatch" for rule, _ in problems) else 1
 
 
 OPENALEX_CACHE = "openalex_search"
@@ -705,35 +715,34 @@ def _openalex_works(title):
 
 def _openalex_paper(entry, title):
     """The OpenAlex work for the entry and its problems, or None: the title must match, and the
-    first work whose authors are the entry's is preferred."""
+    first work with the entry's authors and year is preferred, then the first with its authors."""
     matching = [w for w in _openalex_works(title) if w["title"] and _title_matches(w["title"], title)]
     scored = [(w, _problems(entry, w["authors"], w["year"])) for w in matching]
-    for w, problems in scored:
-        if not any(rule == "authors-mismatch" for rule, _ in problems):
-            return w, problems
-    return scored[0] if scored else None
+    return min(scored, key=lambda s: _rank(s[1])) if scored else None
 
 
 def _best_paper(entry, candidates):
-    """The first candidate whose authors are the entry's, and its problems; else the first one's.
+    """The first candidate with the entry's authors and year, and its problems; else the first with
+    its authors; else the first one.
 
     Titles are ambiguous ("Precise Null-pointer Analysis" is the prefix of another paper's
-    title), so a candidate whose authors differ is only kept when no other one fits.
+    title; "Objective Knowledge" is the title of Popper's book and of its reviews), so a candidate
+    that differs is only kept when none of the first MAX_CANDIDATES fits better.
     """
     candidates = iter(candidates)
     paper = next(candidates)
-    first = (paper, _metadata_problems(entry, paper))
+    best = (paper, _metadata_problems(entry, paper))
     for _ in range(MAX_CANDIDATES - 1):
-        if not any(rule == "authors-mismatch" for rule, _ in first[1]):
+        if not best[1]:
             break
         try:
             paper = next(candidates)
             problems = _metadata_problems(entry, paper)
-        except (StopIteration, Unchecked):  # no other candidate, or none reachable: keep the first
+        except (StopIteration, Unchecked):  # no other candidate, or none reachable: keep the best
             break
-        if not any(rule == "authors-mismatch" for rule, _ in problems):
-            return paper, problems
-    return first
+        if _rank(problems) < _rank(best[1]):
+            best = (paper, problems)
+    return best
 
 
 def check_entry(entry):
@@ -819,6 +828,21 @@ def check_entry(entry):
         paper, problems = _best_paper(entry, itertools.chain([paper], candidates))
     except Unchecked as e:
         problems = [("unchecked", f"authors and year not checked: {e}")]
+    else:
+        # Semantic Scholar may only have reviews and later papers with this title (Hacking 1982 is
+        # a 2021 paper there): OpenAlex is asked for one with the entry's authors and year.
+        work = None
+        if problems:
+            try:
+                work = _openalex_paper(entry, title)
+            except Unchecked:
+                pass  # Semantic Scholar's answer stands
+        if work and _rank(work[1]) < _rank(problems):
+            result.url = work[0]["url"]
+            for rule, message in work[1]:
+                result.add(entry, rule, message)
+            _check_doi(entry, result)
+            return result
     result.url = _url_for_paper(paper)
     for rule, message in problems:
         result.add(entry, rule, message)
