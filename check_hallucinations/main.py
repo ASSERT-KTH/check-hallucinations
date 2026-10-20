@@ -5,6 +5,7 @@ Process a BibTeX file and check each reference for hallucinations via Semantic S
 
 import argparse
 import hashlib
+import html
 import itertools
 import json
 import os
@@ -180,33 +181,59 @@ def _extract_url(howpublished):
     return None
 
 
-def _fetch_page_title(url):
-    fname = _cache_path("page_title", url)
+_INVISIBLE_HTML = re.compile(r"<(script|style|noscript)\b.*?</\1\s*>|<!--.*?-->", re.IGNORECASE | re.DOTALL)
+
+
+def _fetch_page(url):
+    """A web page as {title, text}: its <title> and its visible text (headings and body), entities decoded."""
+    fname = _cache_path("page_v2", url)
     if os.path.exists(fname):
         with open(fname) as f:
-            return json.load(f)["title"]
+            return json.load(f)
     resp = requests.get(url, timeout=10, allow_redirects=True,
                         headers={"User-Agent": "check-hallucinations/1.0"})
     resp.raise_for_status()
     m = re.search(r'<title[^>]*>([^<]+)</title>', resp.text, re.IGNORECASE)
-    title = m.group(1).strip() if m else ""
+    title = " ".join(html.unescape(m.group(1)).split()) if m else ""
+    body = _INVISIBLE_HTML.sub(" ", resp.text)
+    body = re.sub(r"<title[^>]*>.*?</title>", " ", body, flags=re.IGNORECASE | re.DOTALL)
+    text = " ".join(html.unescape(re.sub(r"<[^>]*>", " ", body)).split())
+    page = {"title": title, "text": text}
     with open(fname, "w") as f:
-        json.dump({"title": title}, f)
-    return title
+        json.dump(page, f)
+    return page
+
+
+def _fetch_page_title(url):
+    return _fetch_page(url)["title"]
+
+
+def _shown_in(bib_title, text):
+    """Each part of the title (split at colons) is a phrase of the text: "TOML v1.0.0: Tom's Obvious,
+    Minimal Language" is the heading "TOML v1.0.0" followed by the line "Tom's Obvious, Minimal Language."."""
+    haystack = f" {_normalize_title(text)} "
+    parts = [_normalize_title(p) for p in bib_title.split(":")]
+    parts = [p for p in parts if p]
+    return bool(parts) and all(f" {p} " in haystack for p in parts)
 
 
 def check_misc_url(url, bib_title):
-    page_title = _fetch_page_title(url)
-    if not page_title:
-        raise MiscEntryError(f"No <title> found at {url}")
+    page = _fetch_page(url)
+    page_title = page["title"]
     # When the bib title has a colon, the part after it is the real title
     search_title = bib_title.split(":", 1)[1].strip() if ":" in bib_title else bib_title
     norm_bib = _normalize_title(search_title)
     norm_page = _normalize_title(page_title)
-    if norm_bib not in norm_page and norm_page not in norm_bib:
-        raise MiscEntryError(
-            f"Title does not match page: {bib_title!r} not found in {page_title!r}"
-        )
+    if page_title and (norm_bib in norm_page or norm_page in norm_bib):
+        return
+    # The <title> may be another one ("TOML: English v1.0.0"): the page's headings and text show the title
+    if _shown_in(bib_title, page_title + " . " + page.get("text", "")):
+        return
+    if not page_title:
+        raise MiscEntryError(f"No <title> found at {url}")
+    raise MiscEntryError(
+        f"Title does not match page: {bib_title!r} not found in {page_title!r}"
+    )
 
 
 class SemanticScholarNotFound(Exception):

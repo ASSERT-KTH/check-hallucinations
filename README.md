@@ -38,7 +38,7 @@ Exit status: 0 every entry confirmed, 1 findings, 2 the file cannot be read. Thi
 - `year-mismatch`: the year differs from the paper's by more than two (preprint, online-first and issue years differ, and Semantic Scholar may date a later version).
 - `doi-not-found`, `doi-mismatch`: the `doi` field does not exist, or resolves (doi.org, Crossref and DataCite) to another title.
 - `arxiv-not-found`, `arxiv-mismatch`: an arXiv `@misc` whose identifier does not exist or has another title.
-- `web-mismatch`, `web-not-found`, `no-url`: a web `@misc` whose page has another title, is gone, or has no URL (the `url` field, or `howpublished` as plain text or `\url{}`).
+- `web-mismatch`, `web-not-found`, `no-url`: a web `@misc` whose page shows another title (in its `<title>`, or each colon-separated part of the entry's title as a phrase of its headings and text), is gone, or has no URL (the `url` field, or `howpublished` as plain text or `\url{}`).
 - `no-title`, `unparsed`: an entry without title, a block that is not valid BibTeX.
 - `unchecked`: a lookup failed (network, rate limit). The entry is neither confirmed nor refuted; run again.
 
