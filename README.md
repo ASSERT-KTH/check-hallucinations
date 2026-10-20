@@ -36,7 +36,7 @@ Exit status: 0 every entry confirmed, 1 findings, 2 the file cannot be read. Thi
 - `not-found`, `title-mismatch`: no paper with this title (the closest title is given).
 - `authors-mismatch`: the first author is not an author of the paper found, or fewer than half of the authors are. Last names are compared, LaTeX accents and diacritics removed; `and others` is ignored.
 - `year-mismatch`: the year differs from the paper's by more than two (preprint, online-first and issue years differ, and Semantic Scholar may date a later version).
-- `doi-not-found`, `doi-mismatch`: the `doi` field does not exist, or resolves (doi.org, Crossref and DataCite) to another title.
+- `doi-not-found`, `doi-mismatch`: the `doi` field does not exist, or resolves (doi.org, Crossref and DataCite) to another title. A DOI without Crossref or DataCite record (AI Magazine's `10.1609/aimag.*`) exists when the Handle System resolves it, and its title is OpenAlex's.
 - `arxiv-not-found`, `arxiv-mismatch`: an arXiv `@misc` whose identifier does not exist or has another title.
 - `web-mismatch`, `web-not-found`, `no-url`: a web `@misc` whose page shows another title (in its `<title>`, or each colon-separated part of the entry's title as a phrase of its headings and text), is gone, or has no URL (the `url` field, or `howpublished` as plain text or `\url{}`).
 - `no-title`, `unparsed`: an entry without title, a block that is not valid BibTeX.

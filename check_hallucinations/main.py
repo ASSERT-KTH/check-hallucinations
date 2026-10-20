@@ -105,7 +105,9 @@ class DoiNotFound(Exception):
 def _doi_metadata(doi):
     """The CSL-JSON record of a DOI, from doi.org (Crossref and DataCite alike, so arXiv DOIs too).
 
-    DoiNotFound when doi.org does not know it, Unchecked when it cannot be reached.
+    A DOI of another registration agency (AI Magazine's 10.1609/aimag.*) has no such record: its
+    existence is asked of the Handle System and its metadata of OpenAlex, as CSL-JSON; {} when it
+    exists without metadata. DoiNotFound when the DOI does not exist, Unchecked when unreachable.
     """
     doi = re.sub(r"^(?:https?://(?:dx\.)?doi\.org/|doi:)", "", doi.strip(), flags=re.IGNORECASE)
     fname = _cache_path("doi_csl", doi.lower())
@@ -119,16 +121,65 @@ def _doi_metadata(doi):
     except requests.RequestException as e:
         raise Unchecked(f"doi.org unreachable: {e}") from e
     if resp.status_code == 404:
-        raise DoiNotFound(f"doi {doi} does not exist")
-    if resp.status_code != 200:
+        data = _doi_without_csl(doi)
+    elif resp.status_code != 200:
         raise Unchecked(f"doi.org answered HTTP {resp.status_code} for {doi}")
-    try:
-        data = resp.json()
-    except ValueError as e:
-        raise Unchecked(f"doi.org gave no metadata for {doi}") from e
+    else:
+        try:
+            data = resp.json()
+        except ValueError as e:
+            raise Unchecked(f"doi.org gave no metadata for {doi}") from e
     with open(fname, "w") as f:
         json.dump(data, f)
     return data
+
+
+def _doi_without_csl(doi):
+    """The metadata of a DOI that doi.org has no CSL-JSON for: DoiNotFound unless the Handle System
+    resolves it; then OpenAlex's record as CSL-JSON, or {}."""
+    try:
+        resp = requests.get(f"https://doi.org/api/handles/{doi}", timeout=30,
+                            headers={"User-Agent": "check-hallucinations/1.0"})
+    except requests.RequestException as e:
+        raise Unchecked(f"doi.org handle API unreachable: {e}") from e
+    if resp.status_code == 404:
+        raise DoiNotFound(f"doi {doi} does not exist")
+    if resp.status_code != 200:
+        raise Unchecked(f"doi.org handle API answered HTTP {resp.status_code} for {doi}")
+    try:
+        resp = requests.get(f"https://api.openalex.org/works/doi:{doi}", timeout=30,
+                            params={"mailto": "check-hallucinations@users.noreply.github.com"})
+    except requests.RequestException as e:
+        raise Unchecked(f"OpenAlex unreachable: {e}") from e
+    if resp.status_code == 404:
+        return {}
+    if resp.status_code != 200:
+        raise Unchecked(f"OpenAlex answered HTTP {resp.status_code} for doi {doi}")
+    work = resp.json()
+    csl: dict = {"title": work.get("display_name") or "",
+                 "author": [{"literal": a.get("author", {}).get("display_name", "")}
+                            for a in work.get("authorships") or []]}
+    if work.get("publication_year"):
+        csl["issued"] = {"date-parts": [[work["publication_year"]]]}
+    return csl
+
+
+def _csl_names(csl):
+    """The author names of a CSL-JSON record, "Given Family" or the literal name."""
+    names = []
+    for a in csl.get("author") or []:
+        name = a.get("literal") or " ".join(p for p in (a.get("given"), a.get("family")) if p)
+        if name:
+            names.append(name)
+    return names
+
+
+def _csl_year(csl):
+    """The year a CSL-JSON record was issued, or None."""
+    try:
+        return int(csl["issued"]["date-parts"][0][0])
+    except (KeyError, IndexError, TypeError, ValueError):
+        return None
 
 
 _ARXIV_ID_RE = re.compile(r'(?:arXiv[:\s]+|arxiv\.org/(?:abs|pdf|html)/)(\d{4}\.\d{4,5}(?:v\d+)?)', re.IGNORECASE)
