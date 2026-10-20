@@ -65,6 +65,9 @@ def test_query_text(latex, text):
      "Deadlock Immunity: Enabling Systems to Defend Against Deadlocks",
      "Deadlock immunity: Enabling systems to defend against deadlocks"),       # venue prefix
     ("Fixing Recurring Crash Bugs via Analyzing Q&A Sites", r"Fixing Recurring Crash Bugs via Analyzing {Q\&A} Sites"),
+    ("I.—Knowing How and Knowing that: The Presidential Address",               # section number (OUP)
+     "Knowing How and Knowing That: The Presidential Address"),
+    ("XIII. -- The Concept of Mind", "The Concept of Mind"),
 ])
 def test_titles_match(found, bib):
     assert m._title_matches(found, bib)
@@ -76,6 +79,9 @@ def test_titles_match(found, bib):
     ("A survey on contextual multi-armed bandits", "Contextual Multi-Armed Bandits"),
     ("Proceedings of X: Learning to Repair", "Learning to Repair"),   # boundary: suffix too short
     ("History Driven Program Repair", "History driven automated program repair"),
+    ("I.—Knowing How and Knowing that", "Knowing Why and Knowing That"),   # the number goes, not the title
+    ("I, Robot", "Robot"),                                               # boundary: no section number
+    ("C.-H. Lee: A Life", "H. Lee: A Life"),
 ])
 def test_titles_differ(found, bib):
     assert not m._title_matches(found, bib)

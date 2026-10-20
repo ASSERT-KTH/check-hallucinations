@@ -49,8 +49,13 @@ def _strip_diacritics(s):
     return "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn")
 
 
+# A section number that some records prefix to the title: "I.—Knowing How and Knowing that" (OUP,
+# Proceedings of the Aristotelian Society).
+_SECTION_NUMBER = re.compile(r"^\s*[IVXLCDM]+\s*\.\s*(?:—|–|--)\s*")
+
+
 def _normalize_title(title):
-    title = _query_text(title)
+    title = _SECTION_NUMBER.sub("", _query_text(title))
     # Brackets, dashes and "&" are typography: "(NIER track)" is ": NIER track" elsewhere.
     title = re.sub(r"[()\[\]–—]", " ", title).replace("&", " and ")
     normalized = _strip_diacritics(
