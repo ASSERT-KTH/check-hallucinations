@@ -4,7 +4,7 @@ A command-line tool to detect hallucinated references in BibTeX files before sub
 
 It looks up each reference ([Semantic Scholar](https://www.semanticscholar.org/), then [OpenAlex](https://openalex.org/) when Semantic Scholar has no matching title; arXiv; the web page of a `@misc`), and checks that the paper found is the one the entry describes: same title, same authors, same year, and a DOI that resolves to that title.
 
-Titles are compared whatever their punctuation and markup: `&`, `#`, `+`, `%`, `?`, `:`, parentheses, quotes, dashes, LaTeX accents and commands (`D\&C`, `C\#`, `Bissyand{\'e}`, `\emph{x}`), and venue names that some records prefix to the title. Symbols that change the meaning stay: `C`, `C++` and `C#` are different titles.
+Titles are decoded from LaTeX to Unicode before the lookup (`Protokolls{\"a}tze` is looked up as `Protokollsätze`), and compared whatever their punctuation and markup: `&`, `#`, `+`, `%`, `?`, `:`, parentheses, quotes, dashes, LaTeX accents and commands (`D\&C`, `C\#`, `Bissyand{\'e}`, `\emph{x}`), and venue names that some records prefix to the title. Symbols that change the meaning stay: `C`, `C++` and `C#` are different titles.
 
 ## Installation
 

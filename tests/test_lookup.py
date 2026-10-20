@@ -81,6 +81,37 @@ def test_titles_differ(found, bib):
     assert not m._title_matches(found, bib)
 
 
+@pytest.mark.parametrize("latex,text", [
+    (r'Protokolls{\"a}tze', "Protokollsätze"),
+    (r"Bissyand{\'e} and Lu{\'\i}s", "Bissyandé and Luís"),
+    (r"D\&C: {Q\&A} for C\# and 100\% \$8", "D&C: Q&A for C# and 100% $8"),
+    (r"\emph{Big} {Code}", "Big Code"),
+    ("50% off", "50% off"),  # a bare % is not a LaTeX comment in a title
+    ("Plain title", "Plain title"),
+])
+def test_decode_latex(latex, text):
+    assert m._decode_latex(latex) == text
+
+
+def test_lookup_with_decoded_title(monkeypatch):  # known-positive: Protokolls\"atze was not found
+    asked = []
+
+    def candidates(title, e=None):
+        asked.append(title)
+        yield {"paperId": "p", "title": "Protokollsätze"}
+    monkeypatch.setattr(m, "_candidates", candidates)
+    monkeypatch.setattr(m, "_get_paper_info", lambda pid: {"paperId": pid, "year": 1932,
+                                                           "authors": [{"name": "Otto Neurath"}]})
+    monkeypatch.setattr(m, "_url_for_paper", lambda p: "u")
+    r = m.check_entry(entry(title=r'Protokolls{\"a}tze', author="Neurath, Otto", year="1932"))
+    assert (asked, r.title, r.findings) == (["Protokollsätze"], "Protokollsätze", [])
+
+
+def test_query_key():
+    assert m._query_key("Protokollsätze") != m._query_key(r'Protokolls{\"a}tze')  # not the stripped query's answer
+    assert m._query_key("Attention Is All You Need") == m._normalize_title("Attention Is All You Need")  # caches kept
+
+
 WORK = {"title": "Automatic Software Repair: a Bibliography", "authors": ["Martin Monperrus"],
         "year": 2018, "url": "https://doi.org/10.1145/3105906"}
 

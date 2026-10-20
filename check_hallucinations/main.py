@@ -20,6 +20,7 @@ import bibtexparser
 import keyring
 import keyring.errors
 import requests
+from pylatexenc.latex2text import LatexNodes2Text
 
 from . import _metadata
 
@@ -280,9 +281,17 @@ SS_MATCH_CACHE = "title_to_id_v2"
 SS_SEARCH_CACHE = "search_results_v2"
 
 
+def _query_key(title):
+    """The cache key of a title query: its normalized form, plus the query itself when that has
+    non-ASCII letters, which normalization strips. `Protokolls{\\"a}tze` was sent as "Protokollsatze"
+    (and not found); "Protokollsätze" is another query, not a cache hit for that one."""
+    query = _query_text(title)
+    return _normalize_title(title) if query.isascii() else _normalize_title(title) + "|" + query
+
+
 def _ss_match(title):
     """Call the /match endpoint; returns a single {paperId, title} or None."""
-    fname = _cache_path(SS_MATCH_CACHE, _normalize_title(title))
+    fname = _cache_path(SS_MATCH_CACHE, _query_key(title))
     if os.path.exists(fname):
         try:
             with open(fname) as f:
@@ -305,7 +314,7 @@ def _ss_match(title):
 
 def _ss_search(title):
     """Call the /search endpoint; returns a list of up to 5 {paperId, title}."""
-    fname = _cache_path(SS_SEARCH_CACHE, _normalize_title(title))
+    fname = _cache_path(SS_SEARCH_CACHE, _query_key(title))
     if os.path.exists(fname):
         with open(fname) as f:
             return json.load(f)
@@ -513,6 +522,22 @@ class Result:
         self.findings.append(Finding(entry["ID"], entry.get("LINE", 0), rule, message))
 
 
+_LATEX = LatexNodes2Text()
+
+
+def _decode_latex(text):
+    """LaTeX to Unicode: `Protokolls{\\"a}tze` is `Protokollsätze`, as the records spell it.
+
+    A bare `%` is a percent sign in a title, not a comment. Text that does not decode is kept.
+    """
+    if not text or "\\" not in text and "{" not in text:
+        return text
+    try:
+        return _LATEX.latex_to_text(re.sub(r"(?<!\\)%", r"\\%", text))
+    except Exception:  # malformed LaTeX: the lookup strips it as before
+        return text
+
+
 def _clean_title(title):
     return " ".join(title.replace("{", "").replace("}", "").split()) if title else title
 
@@ -568,7 +593,7 @@ def _openalex_works(title):
     The fallback when Semantic Scholar has no matching title (DBLP's API is behind a bot
     challenge). Cached, including empty answers.
     """
-    fname = _cache_path(OPENALEX_CACHE, _normalize_title(title))
+    fname = _cache_path(OPENALEX_CACHE, _query_key(title))
     if os.path.exists(fname):
         with open(fname) as f:
             return json.load(f)
@@ -628,7 +653,7 @@ def _best_paper(entry, candidates):
 
 def check_entry(entry):
     """Check one parsed entry: its title is found, and its authors, year and DOI are that paper's."""
-    title = _clean_title(entry.get("title"))
+    title = _clean_title(_decode_latex(entry.get("title")))
     if not title:
         result = Result("entry", title, error="no title")
         result.add(entry, "no-title", "the entry has no title to look up")

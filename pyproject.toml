@@ -21,6 +21,7 @@ classifiers = [
 dependencies = [
     "bibtexparser>=2,<3",
     "keyring",
+    "pylatexenc>=2.10,<3",  # also required by bibtexparser 2
     "requests",
 ]
 
