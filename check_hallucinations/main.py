@@ -626,9 +626,9 @@ def check_entry(entry):
             return result
 
         result = Result("misc", title)
-        url = _extract_url(entry.get("howpublished", ""))
+        url = _extract_url(entry.get("howpublished", "")) or _extract_url(entry.get("url", ""))
         if not url:
-            result.add(entry, "no-url", "web reference without a URL in howpublished, cannot be checked")
+            result.add(entry, "no-url", "web reference without a URL in url or howpublished, cannot be checked")
             return result
         try:
             check_misc_url(url, title)
