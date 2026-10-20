@@ -67,7 +67,10 @@ Answers are cached in `~/.cache/check-hallucinations`.
 uv venv && uv pip install -e '.[dev]'
 .venv/bin/pytest && .venv/bin/ruff check . && .venv/bin/mypy check_hallucinations tests scripts
 .venv/bin/python scripts/live_check.py [more-real.bib ...]   # network: silent when the lookup is right
+uv tool install --editable . --force   # the command on PATH, in its own environment, running this checkout
 ```
+
+A `pip install --user` of the checkout runs with the system Python's packages, and fails with `module 'bibtexparser' has no attribute 'parse_string'` where that Python has bibtexparser 1.
 
 The live check runs the lookup on `scripts/corpus/real/` (real papers with difficult titles: every entry must be confirmed) and `scripts/corpus/invented/` (every entry must be reported). Add a title that the tool gets wrong to the corpus before fixing it.
 
