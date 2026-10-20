@@ -83,6 +83,50 @@ def test_handle_system_unreachable_is_unchecked(web):
         m._doi_metadata(DAVIS)
 
 
+RFC8259 = {"title": "The JavaScript Object Notation (JSON) Data Interchange Format", "type": "report",
+           "issued": {"date-parts": [[2017, 12]]}}  # doi.org CSL-JSON of 10.17487/RFC8259: no author
+RFC7159 = {"paperId": "p7159", "title": "The JavaScript Object Notation (JSON) Data Interchange Format"}
+
+
+def bray(**fields):
+    return {"ID": "bray2017json", "LINE": 1, "ENTRYTYPE": "techreport", "author": "Bray, Tim", "year": "2017",
+            "title": "The {JavaScript} Object Notation ({JSON}) Data Interchange Format",
+            "doi": "10.17487/RFC8259", **fields}
+
+
+@pytest.fixture
+def rfc(monkeypatch):
+    """Title search finds RFC 7159 (2014, same title); the DOI is RFC 8259's."""
+    monkeypatch.setattr(m, "_doi_metadata", lambda d: RFC8259)
+    monkeypatch.setattr(m, "_candidates", lambda t, e=None: iter([RFC7159]))
+    monkeypatch.setattr(m, "_get_paper_info", lambda pid: {"paperId": pid, "year": 2014,
+                                                           "authors": [{"name": "T. Bray"}]})
+    monkeypatch.setattr(m, "_url_for_paper", lambda p: "https://doi.org/10.17487/RFC7159")
+
+
+def test_doi_confirms_the_entry(rfc):  # known-positive: was year-mismatch 2014 (RFC 7159)
+    r = m.check_entry(bray())
+    assert (r.url, r.findings) == ("https://doi.org/10.17487/RFC8259", [])
+
+
+def test_doi_of_another_year_does_not_confirm(rfc):  # known-negative: the DOI record must agree
+    r = m.check_entry(bray(year="2009"))
+    assert [f.rule for f in r.findings] == ["year-mismatch"]
+
+
+def test_doi_with_other_authors_does_not_confirm(monkeypatch):  # known-negative: a wrong author
+    neurath = {"title": "Protokollsätze", "author": [{"given": "Otto", "family": "Neurath"}],
+               "issued": {"date-parts": [[1932, 12]]}}
+    monkeypatch.setattr(m, "_doi_metadata", lambda d: neurath)
+    monkeypatch.setattr(m, "_candidates", lambda t, e=None: iter([{"paperId": "p", "title": "Protokollsätze"}]))
+    monkeypatch.setattr(m, "_get_paper_info", lambda pid: {"paperId": pid, "year": 1932,
+                                                           "authors": [{"name": "Otto Neurath"}]})
+    monkeypatch.setattr(m, "_url_for_paper", lambda p: "u")
+    r = m.check_entry({"ID": "n", "LINE": 1, "ENTRYTYPE": "article", "title": r'Protokolls{\"a}tze',
+                       "author": "Carnap, Rudolf", "year": "1932", "doi": "10.1007/BF01886420"})
+    assert [f.rule for f in r.findings] == ["authors-mismatch"]
+
+
 def test_csl_names_and_year():
     csl = {"author": [{"given": "Otto", "family": "Neurath"}, {"literal": "OpenAI"}],
            "issued": {"date-parts": [[1932, 12]]}}

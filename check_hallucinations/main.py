@@ -102,6 +102,11 @@ class DoiNotFound(Exception):
     pass
 
 
+def _bare_doi(doi):
+    """`https://doi.org/10.1/x`, `doi:10.1/x` and `10.1/x` are `10.1/x`."""
+    return re.sub(r"^(?:https?://(?:dx\.)?doi\.org/|doi:)", "", doi.strip(), flags=re.IGNORECASE)
+
+
 def _doi_metadata(doi):
     """The CSL-JSON record of a DOI, from doi.org (Crossref and DataCite alike, so arXiv DOIs too).
 
@@ -109,7 +114,7 @@ def _doi_metadata(doi):
     existence is asked of the Handle System and its metadata of OpenAlex, as CSL-JSON; {} when it
     exists without metadata. DoiNotFound when the DOI does not exist, Unchecked when unreachable.
     """
-    doi = re.sub(r"^(?:https?://(?:dx\.)?doi\.org/|doi:)", "", doi.strip(), flags=re.IGNORECASE)
+    doi = _bare_doi(doi)
     fname = _cache_path("doi_csl", doi.lower())
     if os.path.exists(fname):
         with open(fname) as f:
@@ -617,6 +622,30 @@ def _check_doi(entry, result):
         result.add(entry, "doi-mismatch", f"doi {doi} is {doi_title!r}")
 
 
+def _confirmed_by_doi(entry, title):
+    """The doi.org URL of the entry when its DOI record has its title, authors and year; else None.
+
+    A DOI names one work, a title search may find another one with the same title: RFC 8259 (2017)
+    and RFC 7159 (2014) are both "The JavaScript Object Notation (JSON) Data Interchange Format".
+    When the DOI record disagrees, the title search decides, and `_check_doi` reports the DOI.
+    """
+    doi = entry.get("doi")
+    if not doi:
+        return None
+    try:
+        csl = _doi_metadata(doi)
+    except (DoiNotFound, Unchecked):
+        return None
+    doi_title = csl.get("title")
+    if isinstance(doi_title, list):
+        doi_title = doi_title[0] if doi_title else None
+    if not doi_title or not _title_matches(doi_title, title):
+        return None
+    if _problems(entry, _csl_names(csl), _csl_year(csl)):
+        return None
+    return "https://doi.org/" + _bare_doi(doi)
+
+
 MAX_CANDIDATES = 5
 
 
@@ -758,6 +787,10 @@ def check_entry(entry):
         return result
 
     result = Result("entry", title)
+    url = _confirmed_by_doi(entry, title)
+    if url:
+        result.url = url
+        return result
     try:
         candidates = _candidates(title, entry)
         paper = next(candidates)
